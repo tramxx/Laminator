@@ -54,10 +54,8 @@ union eeprom{ // for writing calibration data
 
 void setup()
 {
-  pinMode(ENCA, INPUT);
-  digitalWrite(ENCA, HIGH);  //enable pull-up
-  pinMode(ENCB, INPUT);
-  digitalWrite(ENCB, HIGH);  //enable pull-up
+  pinMode(ENCA, INPUT_PULLUP); // encoder A has internal pull-up
+  pinMode(ENCB, INPUT_PULLUP); // encoder B has internal pull-up
   pinMode(VDIODE, INPUT);
   pinMode(ENCBTN, INPUT);
   pinMode(BTN1, INPUT);
@@ -76,7 +74,7 @@ void setup()
   tempSet = read_EEPROM(ADDRTEMP);
   lcd.begin(16, 2);
   izpisiEkran();
-  Serial.begin(9600);
+  //Serial.begin(9600);
   naklon = read_EEPROM(ADDRNAKLON);
   zac_vrednost = read_EEPROM(ADDRZACVR);
   
