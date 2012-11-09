@@ -22,7 +22,7 @@
 #define ADDRTEMP   0
 #define ADDRNAKLON 1
 #define ADDRZACVR  2
-#define ADDRMEM    9 //(naslov 3 * trijeBajtiNaRazdelek)
+#define ADDRMEM    12 //(naslov 4 * stirjeBajtiNaRazdelek)
 
 #define REFRESH 1000
 
@@ -76,7 +76,7 @@ void setup()
   tempSet = read_EEPROM(ADDRTEMP);
   lcd.begin(16, 2);
   izpisiEkran();
-  
+  Serial.begin(9600);
   naklon = read_EEPROM(ADDRNAKLON);
   zac_vrednost = read_EEPROM(ADDRZACVR);
   
@@ -85,6 +85,7 @@ void setup()
 void loop()
 {
   static int readNum  = 0;
+  static long time = millis();
   char encoder = encoderChange();
   curTemp = analogRead(VDIODE);
   char buttons = btnChange();
@@ -103,6 +104,7 @@ void loop()
       digitalWrite(GRELEC, grelecState);
       digitalWrite(LED1, grelecState);
       izpisiEkran();
+      time = millis();
     }
   }
   if(buttons)
