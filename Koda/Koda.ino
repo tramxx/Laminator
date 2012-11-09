@@ -38,11 +38,19 @@ unsigned int T1;
 unsigned int T2;
 unsigned int cal1;
 unsigned int cal2;
-double naklon;
-double zac_vrednost;
+float naklon;
+float zac_vrednost;
 byte grelecState = 0;
 
-
+union eeprom{ // for writing calibration data
+  float decimal;     // set data
+  struct {
+    unsigned char N; // First byte, Lowest
+    unsigned char L; // Second byte
+    unsigned char M; // Third byte
+    unsigned char H; // Fourth byte, Highest
+  };
+};
 
 void setup()
 {
@@ -69,7 +77,8 @@ void setup()
   lcd.begin(16, 2);
   izpisiEkran();
   
-  
+  naklon = read_EEPROM(ADDRNAKLON);
+  zac_vrednost = read_EEPROM(ADDRZACVR);
   
 }
 
@@ -272,23 +281,23 @@ void izpisiEkran()
   }
 }
 
-void write_EEPROM(char addr, double data)  //omejeno na 24 bitov
-{
-  data *= 1000;
-  EEPROM.write(addr * 3, (long)data >> 16);     // high
-  EEPROM.write(addr * 3 +1, ((long)data >>8) & 0xff);// middle
-  EEPROM.write(addr * 3 +2, (long)data & 0xff);// low
+void write_EEPROM(byte addr, float value) {
+  eeprom str;
+  str.decimal = value;
+  EEPROM.write(addr*4, str.N);
+  EEPROM.write(addr*4+1, str.L);
+  EEPROM.write(addr*4+2, str.M);
+  EEPROM.write(addr*4+3, str.H);
 }
 
-double read_EEPROM(byte addr)  //omejeno na 24 bitov
-{
-  long data = 0;
-  data = EEPROM.read(addr * 3) << 16; //high
-  data |= EEPROM.read(addr *3 + 1) << 8;   //middle
-  data |= EEPROM.read(addr *3 + 2);   //low
-  return (double)data / 1000.0;
+float read_EEPROM(byte addr) {
+  union eeprom data;
+  data.N = EEPROM.read(addr*4);
+  data.L = EEPROM.read(addr*4+1);
+  data.M = EEPROM.read(addr*4+2);
+  data.H = EEPROM.read(addr*4+3);
+  return data.decimal;
 }
-
 int racT(int adc)
 {
   return adc * naklon + zac_vrednost;
@@ -298,6 +307,8 @@ void racCal()
 {
   naklon = (T2-T1) / (cal2 - cal1);
   zac_vrednost = T1 - cal1 * naklon;
+  write_EEPROM(ADDRNAKLON, naklon);
+  write_EEPROM(ADDRZACVR, zac_vrednost);
 }
 
 void setToMemory(byte mask)
