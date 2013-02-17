@@ -9,37 +9,38 @@
 #define BTN1    A3
 #define BTN2    A4
 #define BTN3    A5
-#define D4      0 
-#define D5      1
+#define D4      11  // uradno 0
+#define D5      12  // uradno 1
 #define D6      2
 #define D7      3
 #define RS      4
 #define EN      5
 #define GRELEC  6
 #define MOTOR   7
-#define DESNO   1
-#define LEVO    -1
+#define DESNO  -1
+#define LEVO    1
 #define ADDRTEMP   0
 #define ADDRNAKLON 1
 #define ADDRZACVR  2
 #define ADDRMEM    12 //(naslov 4 * stirjeBajtiNaRazdelek)
 
-#define REFRESH 100
+#define REFRESH 1000
 
 LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
 
 //spremenljivke za menu
-unsigned char tempSet = 0;  // nastavljena temperatura 
+unsigned char tempSet = 40;  // nastavljena temperatura 
 unsigned int curTemp = 0;   // trenutna temperatura
 unsigned long time = 0;
 unsigned char menu = 21;    // stanje menuja (0 => izven menuja, 1 => kalibracija, 11 - 12 => podmenuja kalibracije, 2 => izhod iz menuja, 21 => prehodni menu)
-unsigned int T1 = 200;      // kalibracijska temperatura reference
-unsigned int T2 = 200;
+unsigned int T1 = 23;      // kalibracijska temperatura reference
+unsigned int T2 = 75;
 unsigned int cal1;          // stanje senzorja ob referenci
 unsigned int cal2;
 float naklon;               // naklon aproksimacijske premice
 float zac_vrednost;         // začetna vrednost
 byte grelecState = 0;       // stanje grelca, ON, OFF
+char tempCont[4] ={' ',' ', ' ', 0};
 
 union eeprom{ // for writing calibration data
   float decimal;     // set data
@@ -72,13 +73,20 @@ void setup()
   pinMode(MOTOR, OUTPUT);
   pinMode(LED1, OUTPUT);
   
-  tempSet = read_EEPROM(ADDRTEMP);  // prenos zeljene temperature v RAM
+  
   lcd.begin(16, 2);
-  //izpisiEkran();    // prehod v menu 0
+
+  //Serial.begin(9600); // samo dokler testiram
+  tempSet = EEPROM.read(ADDRMEM);  // prenos zeljene temperature v RAM
+  delay(100);
+
+  izpisiEkran();    // prehod v menu 0
   izpisiEkran();    // izris menuja 0
   //Serial.begin(9600);
   naklon = read_EEPROM(ADDRNAKLON);        // prenos aproksimacijske premice v RAM
   zac_vrednost = read_EEPROM(ADDRZACVR);
+  //Serial.println(naklon, DEC); // DEBUG
+  //Serial.println(zac_vrednost, DEC); // DEBUG
   
 }
 
@@ -97,8 +105,8 @@ void loop()
     readNum++;
     if (readNum >= 10) {    // povpreči stanje na ADC
       curTemp /= 10;
-      //curTemp = racT(curTemp);
-      curTemp = analogRead(VDIODE);
+      curTemp = racT(curTemp);
+      //curTemp = analogRead(VDIODE);
       readNum = 0;      
       if(curTemp > tempSet) grelecState = 0;
       else if(curTemp < tempSet - 3) grelecState = 1;    // 3 stopinje je temperaturna razlika, kjer ne reagiramo
@@ -120,14 +128,14 @@ void loop()
             menu = 1;
             izpisiEkran();
             break;
-          case 0x2:
-            if(digitalRead(BTN1)) tempSet = EEPROM.read(ADDRMEM); // temperaturo nastavi samo, če je tipka spuščena, drugače čaka, ker bo mogoče moral temperaturo shraniti
+          case 0x20:
+            tempSet = EEPROM.read(ADDRMEM); // temperaturo nastavi samo, če je tipka spuščena, drugače čaka, ker bo mogoče moral temperaturo shraniti
             break;
-          case 0x4:
-            if(digitalRead(BTN2)) tempSet = EEPROM.read(ADDRMEM + 1);
+          case 0x40:
+            tempSet = EEPROM.read(ADDRMEM + 1);
             break;
-          case 0x8: 
-            if(digitalRead(BTN3)) tempSet = EEPROM.read(ADDRMEM + 2);
+          case 0x80: 
+            tempSet = EEPROM.read(ADDRMEM + 2);
             break;
         }
         
@@ -215,22 +223,50 @@ char btnChange()
   static byte btnTemp = 0;
   static long timer = 0;
   byte mask;
-  byte btnState = digitalRead(BTN3) << 3 | digitalRead(BTN2) << 2 | digitalRead(BTN1) << 1 | digitalRead(ENCBTN);
-  if(btnState == btnTemp && !btnState) {    // preveri, ce je kaksna tipka pritisnjena dalj casa 
+  byte btnState = (digitalRead(BTN3) << 3) | (digitalRead(BTN2) << 2) | (digitalRead(BTN1) << 1) | (digitalRead(ENCBTN));
+
+  if(btnState == btnTemp && btnState != 0x07) {    // preveri, ce je kaksna tipka pritisnjena dalj casa 
     if (timer+2000 < millis()) {            // ce je pritisnjena vec kot 2 sekundi, shrani temperaturo kot prednastavljeno vrednost
+      menu = 3;
+      izpisiEkran();
+      delay(1000);
+      menu = 0;
+      izpisiEkran();
       if (menu == 0) setToMemory(btnState); 
     }
     return 0;      
   }
   
   timer = millis();      // resetira timer za gledanje casa
-  mask = (btnTemp^btnState)&btnTemp;
+  mask = (btnTemp^btnState)&btnTemp; // prehod iz 1 -> 0
+
+  //v zgornje stiri bite dodamo prehod iz 0 -> 1
+  mask |= ((btnTemp^btnState)&btnState) << 4;
+
   btnTemp = btnState;
-  delay(20); // Debounce (samo, ko se spremeni stanje)
+  if (mask) delay(10); // Debounce (samo, ko se spremeni stanje)
   return mask;
 }
 
-
+char* itos(int value, byte size, char container[]) {
+  emptyArray(container);
+  for (int i = size-1; i>=0; i--) {
+    if (value) {
+      container[i] = value %10+'0';
+      value /= 10;
+    } else 
+    container[i] = ' '; // so it looks nice
+  }
+  container[size] = 0;
+  return container;
+}
+void emptyArray(char arr[]) {
+  int i = 0;
+  while (arr[i]) {
+    arr[i] = ' ';
+    i++;
+  }
+}
 void izpisiEkran()
 {
   static char stariMenu = 10;
@@ -246,9 +282,9 @@ void izpisiEkran()
         lcd.print("cas=  :  ");
       }
       lcd.setCursor(2, 0);
-      lcd.print(analogRead(VDIODE));
+      lcd.print(itos(curTemp, 4, tempCont));
       lcd.setCursor(11, 0);
-      lcd.print(tempSet);
+      lcd.print(itos(tempSet, 4, tempCont));
       lcd.setCursor(4, 1);
       lcd.print(millis()/1000/60);
       lcd.setCursor(7, 1);
@@ -265,8 +301,10 @@ void izpisiEkran()
       lcd.print("Izberi T1:    C");
       lcd.setCursor(10, 0);
       lcd.print(T1);
-      lcd.setCursor(5, 1);
+      lcd.setCursor(2, 1);
       lcd.print("OK");
+      lcd.setCursor(7, 1);
+      lcd.print(analogRead(VDIODE), DEC);
       break;
     case 12:                      // menu 12
       lcd.clear();
@@ -274,17 +312,27 @@ void izpisiEkran()
       lcd.print("Izberi T2:    C");
       lcd.setCursor(10, 0);
       lcd.print(T2);
-      lcd.setCursor(5, 1);
+      lcd.setCursor(2, 1);
       lcd.print("OK");
+      lcd.setCursor(7, 1);
+      lcd.print(analogRead(VDIODE), DEC);
       break;
     case 2:                      // menu 2
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("Izhod");
       break;
+    case 3:
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Shranjeno");
+      break;
     default:                     // ce je v kakem drugem stanju ( naprimer  menu = 21, kar uporabljamo za izris poljubnega teksta
+      stariMenu = menu;
       menu = 0;
+      return;
   }
+  stariMenu = menu;
 }
 
 void write_EEPROM(byte addr, float value) {    // zapisi float v EEPROM
@@ -307,13 +355,13 @@ float read_EEPROM(byte addr) {                  // beri float iz EEPROM
 
 int racT(int adc)
 {
-  return adc * naklon + zac_vrednost;
+  return (adc * naklon) + zac_vrednost;
 }
 
 void racCal()
 {
-  naklon = (T2-T1) / (cal2 - cal1);
-  zac_vrednost = T1 - cal1 * naklon;
+  naklon = ((float)T2-(float)T1) / ((float)cal2 - (float)cal1); // its negative
+  zac_vrednost = T1 - (cal1 * naklon);
   write_EEPROM(ADDRNAKLON, naklon);
   write_EEPROM(ADDRZACVR, zac_vrednost);
 }
@@ -322,20 +370,20 @@ void setToMemory(byte mask)    // Shrani prednastavljeno temperaturo v EEPROM
 {
   if (menu == 0) 
   {
-    switch(mask)
+    switch((~mask)&0x07)
     {
       case 0x2:
-        EEPROM.write(ADDRMEM, curTemp);
+        EEPROM.write(ADDRMEM, tempSet);
         break;
       case 0x4:
-        EEPROM.write(ADDRMEM + 1, curTemp);
+        EEPROM.write(ADDRMEM + 1, tempSet);
         break;
       case 0x8: 
-        EEPROM.write(ADDRMEM + 2, curTemp);
+        EEPROM.write(ADDRMEM + 2, tempSet);
         break;
     }
-    lcd.setCursor(0, 1);
-    lcd.print("Dodano v spomin");
-    menu = 21;
+    //lcd.setCursor(0, 1);
+    //lcd.print("Dodano v spomin");
+    //menu = 21;
   }
 }       
