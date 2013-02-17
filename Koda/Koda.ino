@@ -2,13 +2,13 @@
 #include <LiquidCrystal.h>
 
 #define ENCA    9
-#define ENCB    10
-#define ENCBTN  1
-#define VDIODE  1
-#define LED1    1
-#define BTN1    1
-#define BTN2    1
-#define BTN3    1
+#define ENCB    8
+#define ENCBTN  A1
+#define VDIODE  A0
+#define LED1    A2
+#define BTN1    A3
+#define BTN2    A4
+#define BTN3    A5
 #define D4      0 
 #define D5      1
 #define D6      2
@@ -18,14 +18,13 @@
 #define GRELEC  6
 #define MOTOR   7
 #define DESNO   1
-#define LEVO    2
+#define LEVO    -1
 #define ADDRTEMP   0
 #define ADDRNAKLON 1
 #define ADDRZACVR  2
 #define ADDRMEM    12 //(naslov 4 * stirjeBajtiNaRazdelek)
 
-#define REFRESH 1000
-
+#define REFRESH 100
 
 LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
 
@@ -75,7 +74,7 @@ void setup()
   
   tempSet = read_EEPROM(ADDRTEMP);  // prenos zeljene temperature v RAM
   lcd.begin(16, 2);
-  izpisiEkran();    // prehod v menu 0
+  //izpisiEkran();    // prehod v menu 0
   izpisiEkran();    // izris menuja 0
   //Serial.begin(9600);
   naklon = read_EEPROM(ADDRNAKLON);        // prenos aproksimacijske premice v RAM
@@ -98,7 +97,8 @@ void loop()
     readNum++;
     if (readNum >= 10) {    // povpreči stanje na ADC
       curTemp /= 10;
-      curTemp = racT(curTemp);
+      //curTemp = racT(curTemp);
+      curTemp = analogRead(VDIODE);
       readNum = 0;      
       if(curTemp > tempSet) grelecState = 0;
       else if(curTemp < tempSet - 3) grelecState = 1;    // 3 stopinje je temperaturna razlika, kjer ne reagiramo
@@ -174,7 +174,7 @@ void loop()
     switch(menu)     // reakcija na spremembo encoderja je odvisna od tega, v katerem menuju smo
     {
       case 0: 
-        curTemp += encoder;     //spremenimo nastavljeno temperaturo
+        tempSet += encoder;     //spremenimo nastavljeno temperaturo
         izpisiEkran(); 
         break;
       case 1:
@@ -233,7 +233,7 @@ char btnChange()
 
 void izpisiEkran()
 {
-  static char stariMenu = 0;
+  static char stariMenu = 10;
   switch(menu)
   {
     case 0:                      // menu 0
@@ -246,12 +246,12 @@ void izpisiEkran()
         lcd.print("cas=  :  ");
       }
       lcd.setCursor(2, 0);
-      lcd.print(curTemp);
-      lcd.setCursor(10, 0);
+      lcd.print(analogRead(VDIODE));
+      lcd.setCursor(11, 0);
       lcd.print(tempSet);
-      lcd.setCursor(4, 0);
+      lcd.setCursor(4, 1);
       lcd.print(millis()/1000/60);
-      lcd.setCursor(7, 0);
+      lcd.setCursor(7, 1);
       lcd.print((millis()/1000) % 60);
       break;
     case 1:                      // menu 1
